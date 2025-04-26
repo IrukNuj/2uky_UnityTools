@@ -1,0 +1,20 @@
+{
+  "name": "RebindBoneTests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor",
+    "UnityEngine"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "testAssemblies": true
+}

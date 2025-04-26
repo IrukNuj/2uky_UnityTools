@@ -18,7 +18,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
         SkinnedMeshRenderer smr = (SkinnedMeshRenderer)target;
 
         GUILayout.Space(10);
-        EditorGUILayout.LabelField("\uD83E\uDDB4 Bone Tools", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("\uD83E\uDDB4 Bone再設定ツールくん", EditorStyles.boldLabel);
 
         customSkinnedMesh = (SkinnedMeshRenderer)EditorGUILayout.ObjectField("Target SkinnedMeshRenderer", customSkinnedMesh ?? smr, typeof(SkinnedMeshRenderer), true);
         customRootBone = (Transform)EditorGUILayout.ObjectField("Root Bone (Armature/Hips)", customRootBone, typeof(Transform), true);
@@ -75,7 +75,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
                 matchCount++;
             }
             else {
-                unmatchedBones.Add(boneNames[i]);
+                unmatchedBones.Add(boneNames[i] ?? "(Missing Bone)");
             }
         }
 
@@ -90,11 +90,18 @@ public class SkinnedMeshRendererRebindEditor : Editor
     }
 
     private List<string> GetUnmatchedBones(SkinnedMeshRenderer smr, Transform rootBone) {
-        if (smr.bones == null) return new List<string>();
+        var unmatched = new List<string>();
+        if (smr == null || rootBone == null) return unmatched;
 
-        var boneNames = smr.bones.Where(b => b != null).Select(b => b.name).ToList();
-        var rootBoneNames = rootBone.GetComponentsInChildren<Transform>().Select(t => t.name).ToHashSet();
-        return boneNames.Where(name => !rootBoneNames.Contains(name)).ToList();
+        var boneNamesInHierarchy = new HashSet<string>(rootBone.GetComponentsInChildren<Transform>().Select(t => t.name));
+
+        foreach (var bone in smr.bones) {
+            if (bone == null || !boneNamesInHierarchy.Contains(bone.name)) {
+                unmatched.Add(bone?.name ?? "(Missing Bone)");
+            }
+        }
+
+        return unmatched;
     }
 
     private void DrawSkinnedMeshInfo(SkinnedMeshRenderer smr) {
@@ -109,6 +116,8 @@ public class SkinnedMeshRendererRebindEditor : Editor
                     var bone = smr.bones[i];
                     if (bone != null)
                         EditorGUILayout.LabelField($"[{i}] {bone.name}");
+                    else
+                        EditorGUILayout.LabelField($"[{i}] (Missing Bone)");
                 }
                 EditorGUI.indentLevel--;
             }
