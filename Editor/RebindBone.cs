@@ -20,7 +20,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
         GUILayout.Space(10);
         EditorGUILayout.LabelField("\uD83E\uDDB4 Bone再設定ツールくん", EditorStyles.boldLabel);
 
-        customSkinnedMesh = (SkinnedMeshRenderer)EditorGUILayout.ObjectField("Target SkinnedMeshRenderer", customSkinnedMesh ?? smr, typeof(SkinnedMeshRenderer), true);
+        customSkinnedMesh = (SkinnedMeshRenderer)EditorGUILayout.ObjectField("SkinnedMeshRenderer", customSkinnedMesh ?? smr, typeof(SkinnedMeshRenderer), true);
         customRootBone = (Transform)EditorGUILayout.ObjectField("Root Bone (Armature/Hips)", customRootBone, typeof(Transform), true);
 
         if (customSkinnedMesh && customRootBone) {
@@ -30,7 +30,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
         DrawSkinnedMeshInfo(customSkinnedMesh);
         DrawRootBoneInfo(customRootBone);
 
-        if (GUILayout.Button("\uD83C\uDFCB\uFE0F Rebind Bones to Avatar")) {
+        if (GUILayout.Button("\uD83C\uDFCB\uFE0F Boneの再設定をする")) {
             PerformRebind(customSkinnedMesh ?? smr);
         }
     }
@@ -38,7 +38,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
     private void HandleUnmatchedBones(SkinnedMeshRenderer smr, Transform rootBone) {
         var unmatched = GetUnmatchedBones(smr, rootBone);
         if (unmatched.Any()) {
-            EditorGUILayout.HelpBox($"⚠️ Boneが一致しません！未一致: {unmatched.Count}本", MessageType.Warning);
+            EditorGUILayout.HelpBox($"⚠️ 一致しないBoneが存在します！未一致: {unmatched.Count}本", MessageType.Warning);
             isShowingUnmatchedPreview = EditorGUILayout.Foldout(isShowingUnmatchedPreview, "未一致のBone一覧");
             if (isShowingUnmatchedPreview) {
                 EditorGUI.indentLevel++;
@@ -51,12 +51,12 @@ public class SkinnedMeshRendererRebindEditor : Editor
 
     private void PerformRebind(SkinnedMeshRenderer targetSMR) {
         if (targetSMR == null || customRootBone == null) {
-            Debug.LogWarning("SkinnedMeshRenderer または Root Bone が未設定です！");
+            Debug.LogError("SkinnedMeshRenderer または Root Bone が未設定です！");
             return;
         }
 
         if (targetSMR.bones == null) {
-            Debug.LogWarning("対象のSkinnedMeshRendererにboneがありません。");
+            Debug.LogError("対象のSkinnedMeshRendererにboneがありません。");
             return;
         }
 
@@ -82,7 +82,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
         targetSMR.bones = newBones;
         targetSMR.rootBone = customRootBone;
 
-        Debug.Log($"✅ {targetSMR.name} に対して Rebind 完了！一致: {matchCount}/{boneNames.Length}本");
+        Debug.Log($"✅ {targetSMR.name} に対して Boneの再設定がかんりょうしました！一致: {matchCount}/{boneNames.Length}本");
 
         if (unmatchedBones.Count > 0) {
             Debug.LogWarning($"❌ 一致しなかった Bone名一覧:\n- {string.Join("\n- ", unmatchedBones)}");
