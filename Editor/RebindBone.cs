@@ -2,25 +2,41 @@ using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 [CustomEditor(typeof(SkinnedMeshRenderer))]
 public class SkinnedMeshRendererRebindEditor : Editor
 {
+    private Editor defaultEditor;
     private Transform customRootBone;
     private SkinnedMeshRenderer customSkinnedMesh;
-    private bool isShowingSkinnedMeshBones = false;
-    private bool isShowingRootBoneChildren = false;
-    private bool isShowingUnmatchedPreview = true;
+    private bool isShowSkinnedMeshBones = false;
+    private bool isShowRootBoneChildren = false;
+    private bool isShowUnmatchedPreview = true;
+
+    private void OnEnable() {
+        var editorType = typeof(Editor).Assembly.GetType("UnityEditor.SkinnedMeshRendererEditor");
+        if (editorType != null) {
+            defaultEditor = CreateEditor(targets, editorType);
+        }
+    }
+
+    private void OnDisable() {
+        if (defaultEditor != null)
+            DestroyImmediate(defaultEditor);
+    }
 
     public override void OnInspectorGUI() {
-        base.OnInspectorGUI();
+        if (defaultEditor != null) {
+            defaultEditor.OnInspectorGUI();
+        }
+
+        GUILayout.Space(10);
+        EditorGUILayout.LabelField("\uD83E\uDDB4  Bone再設定ツールくん", EditorStyles.boldLabel);
 
         SkinnedMeshRenderer smr = (SkinnedMeshRenderer)target;
 
-        GUILayout.Space(10);
-        EditorGUILayout.LabelField("\uD83E\uDDB4 Bone再設定ツールくん", EditorStyles.boldLabel);
-
-        customSkinnedMesh = (SkinnedMeshRenderer)EditorGUILayout.ObjectField("SkinnedMeshRenderer", customSkinnedMesh ?? smr, typeof(SkinnedMeshRenderer), true);
+        customSkinnedMesh = (SkinnedMeshRenderer)EditorGUILayout.ObjectField("SkinnedMeshRenderer", customSkinnedMesh ? customSkinnedMesh : smr, typeof(SkinnedMeshRenderer), true);
         customRootBone = (Transform)EditorGUILayout.ObjectField("Root Bone (Armature/Hips)", customRootBone, typeof(Transform), true);
 
         if (customSkinnedMesh && customRootBone) {
@@ -31,7 +47,7 @@ public class SkinnedMeshRendererRebindEditor : Editor
         DrawRootBoneInfo(customRootBone);
 
         if (GUILayout.Button("\uD83C\uDFCB\uFE0F Boneの再設定をする")) {
-            PerformRebind(customSkinnedMesh ?? smr);
+            PerformRebind(smr);
         }
     }
 
@@ -39,8 +55,8 @@ public class SkinnedMeshRendererRebindEditor : Editor
         var unmatched = GetUnmatchedBones(smr, rootBone);
         if (unmatched.Any()) {
             EditorGUILayout.HelpBox($"⚠️ 一致しないBoneが存在します！未一致: {unmatched.Count}本", MessageType.Warning);
-            isShowingUnmatchedPreview = EditorGUILayout.Foldout(isShowingUnmatchedPreview, "未一致のBone一覧");
-            if (isShowingUnmatchedPreview) {
+            isShowUnmatchedPreview = EditorGUILayout.Foldout(isShowUnmatchedPreview, "未一致のBone一覧");
+            if (isShowUnmatchedPreview) {
                 EditorGUI.indentLevel++;
                 foreach (var bone in unmatched)
                     EditorGUILayout.LabelField("• " + bone);
@@ -49,33 +65,36 @@ public class SkinnedMeshRendererRebindEditor : Editor
         }
     }
 
-    private void PerformRebind(SkinnedMeshRenderer targetSMR) {
-        if (targetSMR == null || customRootBone == null) {
-            Debug.LogError("SkinnedMeshRenderer または Root Bone が未設定です！");
+    private void PerformRebind(SkinnedMeshRenderer fallbackSMR) {
+        var targetSMR = customSkinnedMesh ? customSkinnedMesh : fallbackSMR;
+
+        if (targetSMR == null) {
+            Debug.LogError("SkinnedMeshRenderer が選択されていません！");
             return;
         }
 
-        if (targetSMR.bones == null) {
-            Debug.LogError("対象のSkinnedMeshRendererにboneがありません。");
+        if (customRootBone == null) {
+            Debug.LogError("Root Bone (Armature/Hips) を設定してください！");
             return;
         }
 
-        var boneNames = targetSMR.bones.Select(b => b?.name).ToArray();
+        var boneNames = new string[targetSMR.bones.Length];
+        for (int i = 0; i < boneNames.Length; i++)
+            boneNames[i] = targetSMR.bones[i]?.name;
+
         var newBones = new Transform[boneNames.Length];
-
         var allTransforms = customRootBone.root.GetComponentsInChildren<Transform>();
-        var transformMap = allTransforms.ToDictionary(t => t.name, t => t);
-
         var unmatchedBones = new List<string>();
         int matchCount = 0;
 
         for (int i = 0; i < boneNames.Length; i++) {
-            if (boneNames[i] != null && transformMap.TryGetValue(boneNames[i], out var match)) {
+            var match = allTransforms.FirstOrDefault(t => t.name == boneNames[i]);
+            if (match != null) {
                 newBones[i] = match;
                 matchCount++;
             }
             else {
-                unmatchedBones.Add(boneNames[i] ?? "(Missing Bone)");
+                unmatchedBones.Add(boneNames[i]);
             }
         }
 
@@ -90,18 +109,9 @@ public class SkinnedMeshRendererRebindEditor : Editor
     }
 
     private List<string> GetUnmatchedBones(SkinnedMeshRenderer smr, Transform rootBone) {
-        var unmatched = new List<string>();
-        if (smr == null || rootBone == null) return unmatched;
-
-        var boneNamesInHierarchy = new HashSet<string>(rootBone.GetComponentsInChildren<Transform>().Select(t => t.name));
-
-        foreach (var bone in smr.bones) {
-            if (bone == null || !boneNamesInHierarchy.Contains(bone.name)) {
-                unmatched.Add(bone?.name ?? "(Missing Bone)");
-            }
-        }
-
-        return unmatched;
+        var boneNames = smr.bones.Where(b => b != null).Select(b => b.name).ToList();
+        var rootBoneNames = rootBone.GetComponentsInChildren<Transform>().Select(t => t.name).ToHashSet();
+        return boneNames.Where(name => !rootBoneNames.Contains(name)).ToList();
     }
 
     private void DrawSkinnedMeshInfo(SkinnedMeshRenderer smr) {
@@ -109,15 +119,13 @@ public class SkinnedMeshRendererRebindEditor : Editor
             EditorGUILayout.LabelField("選択された SkinnedMesh:", smr.name);
             EditorGUILayout.LabelField($"\u2022 bone数: {smr.bones?.Length ?? 0}");
 
-            isShowingSkinnedMeshBones = EditorGUILayout.Foldout(isShowingSkinnedMeshBones, "\u25BE Bone 詳細（SkinnedMesh）");
-            if (isShowingSkinnedMeshBones && smr.bones != null) {
+            isShowSkinnedMeshBones = EditorGUILayout.Foldout(isShowSkinnedMeshBones, "\u25BE Bone 詳細（SkinnedMesh）");
+            if (isShowSkinnedMeshBones && smr.bones != null) {
                 EditorGUI.indentLevel++;
                 for (int i = 0; i < smr.bones.Length; i++) {
                     var bone = smr.bones[i];
                     if (bone != null)
                         EditorGUILayout.LabelField($"[{i}] {bone.name}");
-                    else
-                        EditorGUILayout.LabelField($"[{i}] (Missing Bone)");
                 }
                 EditorGUI.indentLevel--;
             }
@@ -130,8 +138,8 @@ public class SkinnedMeshRendererRebindEditor : Editor
             var allChildren = rootBone.GetComponentsInChildren<Transform>();
             EditorGUILayout.LabelField($"\u2022 子Transform数: {allChildren.Length}");
 
-            isShowingRootBoneChildren = EditorGUILayout.Foldout(isShowingRootBoneChildren, "\u25BE Bone 詳細（RootBone配下）");
-            if (isShowingRootBoneChildren) {
+            isShowRootBoneChildren = EditorGUILayout.Foldout(isShowRootBoneChildren, "\u25BE Bone 詳細（RootBone配下）");
+            if (isShowRootBoneChildren) {
                 EditorGUI.indentLevel++;
                 for (int i = 0; i < allChildren.Length; i++) {
                     EditorGUILayout.LabelField($"[{i}] {allChildren[i].name}");
